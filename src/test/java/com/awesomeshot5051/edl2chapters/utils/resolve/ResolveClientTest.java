@@ -106,10 +106,10 @@ class ResolveClientTest {
 
     @Test
     void installsLuaScriptWithMailboxAndRemovesLegacyPython() throws IOException {
-        Path legacy = Files.createDirectories(dir.resolve("Fusion/Scripts/Edit")).resolve("Edl2Chapters.py");
+        Path legacy = Files.createDirectories(dir.resolve("Scripts/Edit")).resolve("Edl2Chapters.py");
         Files.writeString(legacy, "old");
         Path installed = ResolveScriptInstaller.install(dir, mailbox);
-        assertEquals(dir.resolve("Fusion/Scripts/Utility/Edl2Chapters.lua"), installed);
+        assertEquals(dir.resolve("Scripts/Utility/Edl2Chapters.lua"), installed);
         assertFalse(Files.exists(legacy));
         String script = Files.readString(installed);
         assertTrue(script.contains("[[" + mailbox.toAbsolutePath() + "]]"));

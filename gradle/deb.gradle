@@ -1,0 +1,73 @@
+// Debian package: jpackage .deb (bundled JRE), then repacked to add /usr/bin/edl2chapters and tidy the launcher entry.
+def packageName = rootProject.ext.packageName
+def displayName = rootProject.ext.displayName
+def mainClassName = rootProject.ext.mainClassName
+def wmClass = rootProject.ext.wmClass
+def appDescription = rootProject.ext.appDescription
+def distributionsDir = rootProject.ext.distributionsDir
+def jpackageInput = rootProject.ext.jpackageInput
+def jpackageBinary = rootProject.ext.jpackageBinary
+def jarFileName = rootProject.ext.jarFileName
+
+def buildDeb = tasks.register('buildDeb', Exec) {
+    group = 'distribution'
+    description = 'Builds a .deb installer containing a private JRE (needs dpkg-deb and fakeroot).'
+    dependsOn 'prepareJpackageInput'
+    inputs.dir jpackageInput
+    outputs.dir distributionsDir
+    doFirst {
+        if (jpackageBinary == null) {
+            throw new GradleException('jpackage not found; pass -PjdkHome=<full JDK 25 path> or put it on PATH')
+        }
+        distributionsDir.get().asFile.mkdirs()
+        commandLine jpackageBinary.absolutePath,
+                '--type', 'deb',
+                '--name', packageName,
+                '--app-version', project.version.toString(),
+                '--vendor', 'awesomeshot5051',
+                '--description', appDescription,
+                '--input', jpackageInput.get().asFile.absolutePath,
+                '--main-jar', jarFileName.get(),
+                '--main-class', mainClassName,
+                '--add-modules', 'java.base,java.desktop,java.logging,java.xml,jdk.unsupported',
+                '--java-options', '--enable-native-access=ALL-UNNAMED',
+                '--icon', file('src/main/resources/icons/ETIcon.png').absolutePath,
+                '--linux-shortcut',
+                '--linux-menu-group', 'AudioVideo;Video',
+                '--linux-package-name', packageName,
+                '--dest', distributionsDir.get().asFile.absolutePath
+    }
+}
+
+// jpackage only installs under /opt; repack the .deb to add /usr/bin/edl2chapters (CLI on the user's PATH).
+// The same launcher opens the GUI with no arguments and runs the CLI with a file argument.
+def repackScript = '''
+    set -e
+    W="$1"; D="$2"
+    DESKTOP="$W/opt/@PKG@/lib/@PKG@-@PKG@.desktop"
+    dpkg-deb -R "$D" "$W"
+    mkdir -p "$W/usr/bin"
+    chmod 755 "$W/usr" "$W/usr/bin"
+    sed -i 's/^Name=.*/Name=@DISPLAY@/' "$DESKTOP"
+    echo "StartupWMClass=@WMCLASS@" >> "$DESKTOP"
+    ln -sf /opt/@PKG@/bin/@PKG@ "$W/usr/bin/@PKG@"
+    fakeroot dpkg-deb -b "$W" "$D"
+'''.stripIndent().replace('@PKG@', packageName).replace('@DISPLAY@', displayName).replace('@WMCLASS@', wmClass)
+
+def addCliToPath = tasks.register('addCliToPath', Exec) {
+    group = 'distribution'
+    description = 'Adds a /usr/bin symlink, launcher name and window class to the generated .deb.'
+    dependsOn buildDeb
+    def work = layout.buildDirectory.dir('deb-repack')
+    doFirst {
+        work.get().asFile.deleteDir()
+        def deb = distributionsDir.get().file("${packageName}_${project.version}_amd64.deb").asFile
+        commandLine 'sh', '-c', repackScript, 'sh', work.get().asFile.absolutePath, deb.absolutePath
+    }
+}
+
+tasks.register('packageDeb') {
+    group = 'distribution'
+    description = 'Builds the final installable .deb (GUI launcher, icon, CLI on PATH).'
+    dependsOn addCliToPath
+}

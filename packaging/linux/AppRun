@@ -1,0 +1,14 @@
+#!/bin/sh
+# Entry point of the AppImage: no arguments opens the GUI, a file argument runs the CLI.
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# Put `edl2chapters` on the PATH: keep ~/.local/bin/edl2chapters pointing at this AppImage
+# (re-pointed on every run, so moving the file self-heals). Set EDL2CHAPTERS_NO_LINK=1 to skip.
+if [ -n "$APPIMAGE" ] && [ -z "$EDL2CHAPTERS_NO_LINK" ]; then
+    BIN="${XDG_BIN_HOME:-$HOME/.local/bin}"
+    if [ ! -e "$BIN/edl2chapters" ] || [ -L "$BIN/edl2chapters" ]; then
+        mkdir -p "$BIN" 2>/dev/null && ln -sf "$APPIMAGE" "$BIN/edl2chapters" 2>/dev/null
+    fi
+fi
+
+exec "$HERE/usr/edl2chapters/bin/edl2chapters" "$@"

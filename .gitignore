@@ -3,3 +3,7 @@
 /build/
 /build/classes/java/main/
 /build/classes/java/test/
+# Local tooling
+/.idea/workspace.xml
+__pycache__/
+*.log

@@ -1,0 +1,101 @@
+// GitHub release: creates and pushes tag v<version>, then the release with the full CHANGELOG.md as notes and every
+// installer found in build/distributions. The Windows .exe can only be built on Windows, so it is optional here:
+// the release workflow (triggered by the pushed tag) builds it and uploads it to this release.
+def distributionsDir = rootProject.ext.distributionsDir
+
+def repository = 'awesomeshot5051/edl2Chapters'
+def version = project.version.toString()
+def tag = "v${version}"
+
+def installers = [
+        "edl2chapters_${version}_amd64.deb",
+        "Edl2Chapters-${version}-x86_64.AppImage",
+        "Edl2Chapters-${version}.exe"
+]
+
+def releaseNotes = tasks.register('releaseNotes') {
+    group = 'release'
+    description = 'Writes build/release-notes.md: the complete CHANGELOG.md plus a compare link.'
+    def changelog = layout.projectDirectory.file('CHANGELOG.md')
+    def out = layout.buildDirectory.file('release-notes.md')
+    inputs.file changelog
+    outputs.file out
+    doLast {
+        def text = changelog.asFile.text.trim()
+        if (!text.contains("## [${version}]")) {
+            throw new GradleException("CHANGELOG.md has no entry for ${version}")
+        }
+        def previous = (text =~ /## \[(\d+\.\d+\.\d+)]/).collect { it[1] }.find { it != version }
+        def compare = previous ? "\n\n**Full diff:** https://github.com/${repository}/compare/v${previous}...${tag}" : ''
+        out.get().asFile.with { parentFile.mkdirs(); text = "${text}${compare}\n" }
+    }
+}
+
+tasks.register('publishRelease') {
+    group = 'release'
+    description = "Tags ${tag} and creates/updates the GitHub release as 'latest' with the .deb and .AppImage (and .exe if built) " +
+            '(-PdryRun prints the plan; -PallowPartial publishes with the .deb or .AppImage missing).'
+    dependsOn releaseNotes
+    def notes = layout.buildDirectory.file('release-notes.md')
+    def dryRun = providers.gradleProperty('dryRun').isPresent()
+    def allowPartial = providers.gradleProperty('allowPartial').isPresent()
+    def projectDir = layout.projectDirectory.asFile
+    doLast {
+        def run = { List<String> cmd, boolean quiet = false ->
+            def process = new ProcessBuilder(cmd.collect { it.toString() }).directory(projectDir).redirectErrorStream(true).start()
+            def output = process.inputStream.text
+            def code = process.waitFor()
+            if (!quiet && output.trim()) println output.trim()
+            [code: code, out: output.trim()]
+        }
+        def fail = { String message -> throw new GradleException(message) }
+
+        def files = installers.collect { distributionsDir.get().file(it).asFile }
+        def present = files.findAll { it.exists() }
+        def missing = files.findAll { !it.exists() && !it.name.endsWith('.exe') }
+        if (present.isEmpty()) fail('No installers in build/distributions; build them first')
+        if (!missing.isEmpty() && !allowPartial) {
+            fail("Missing installers: ${missing*.name.join(', ')} (use -PallowPartial to publish anyway)")
+        }
+
+        def head = run(['git', 'rev-parse', 'HEAD'], true).out
+        if (!dryRun) {
+            if (run(['git', 'status', '--porcelain'], true).out) fail('Working tree has uncommitted changes')
+            run(['git', 'fetch', '--quiet', 'origin'])
+            def branch = run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], true).out
+            def remote = run(['git', 'rev-parse', "origin/${branch}".toString()], true).out
+            if (head != remote) fail("Commit ${head} is not pushed to origin/${branch}; push it before releasing")
+        }
+
+        def tagExistsRemotely = run(['git', 'ls-remote', '--tags', 'origin', "refs/tags/${tag}".toString()], true).out as boolean
+        def tagCommand = ['git', 'tag', '-a', tag, head, '-m', "Edl2Chapters ${version}".toString()]
+        def pushTag = ['git', 'push', 'origin', "refs/tags/${tag}".toString()]
+
+        def exists = run(['gh', 'release', 'view', tag, '--repo', repository], true).code == 0
+        def paths = present*.absolutePath
+        def create = ['gh', 'release', 'create', tag, '--repo', repository, '--verify-tag',
+                      '--title', "Edl2Chapters ${version}".toString(), '--notes-file', notes.get().asFile.absolutePath, '--latest'] + paths
+        def upload = ['gh', 'release', 'upload', tag, '--repo', repository, '--clobber'] + paths
+        def edit = ['gh', 'release', 'edit', tag, '--repo', repository, '--notes-file', notes.get().asFile.absolutePath, '--latest']
+
+        if (dryRun) {
+            println "DRY RUN - would publish ${tag} at ${head} with: ${present*.name.join(', ')}"
+            if (!tagExistsRemotely) println tagCommand.join(' ') + '\n' + pushTag.join(' ')
+            println exists ? 'Existing release: ' + edit.join(' ') + '\n' + upload.join(' ') : create.join(' ')
+            return
+        }
+        if (!tagExistsRemotely) {
+            if (run(['git', 'rev-parse', '-q', '--verify', "refs/tags/${tag}".toString()], true).code != 0) {
+                if (run(tagCommand).code != 0) fail('git tag failed')
+            }
+            if (run(pushTag).code != 0) fail("git push of tag ${tag} failed")
+        }
+        if (exists) {
+            if (run(edit).code != 0) fail('gh release edit failed')
+            if (run(upload).code != 0) fail('gh release upload failed')
+        } else {
+            if (run(create).code != 0) fail('gh release create failed')
+        }
+        println "Published https://github.com/${repository}/releases/tag/${tag}"
+    }
+}

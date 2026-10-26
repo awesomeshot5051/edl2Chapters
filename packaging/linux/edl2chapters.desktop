@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Edl2Chapters
+Comment=Converts DaVinci Resolve EDL markers to YouTube chapters
+Exec=edl2chapters
+Icon=edl2chapters
+Terminal=false
+Categories=AudioVideo;Video;
+StartupWMClass=com.awesomeshot5051.edl2chapters.app.gui.EdlToChaptersApp

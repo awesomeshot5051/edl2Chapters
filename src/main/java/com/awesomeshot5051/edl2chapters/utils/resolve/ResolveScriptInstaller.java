@@ -11,10 +11,10 @@ import java.util.List;
 public final class ResolveScriptInstaller {
 
     /** Utility scripts appear in Workspace > Scripts on every page (page folders like Edit only show on their page). */
-    private static final String SCRIPT_FOLDER = "Fusion/Scripts/Utility";
+    private static final String SCRIPT_FOLDER = "Scripts/Utility";
     /** Earlier versions installed a Python script into these places; remove it. */
     private static final List<String> LEGACY_SCRIPTS = List.of(
-            "Fusion/Scripts/Edit/Edl2Chapters.py", "Fusion/Scripts/Utility/Edl2Chapters.py");
+            "Scripts/Edit/Edl2Chapters.py", "Scripts/Utility/Edl2Chapters.py");
     public static final String SCRIPT_NAME = "Edl2Chapters.lua";
     private static final String RESOURCE = "/resolve/" + SCRIPT_NAME;
     private static final String MAILBOX_PLACEHOLDER = "@MAILBOX@";
@@ -22,11 +22,11 @@ public final class ResolveScriptInstaller {
     private ResolveScriptInstaller() {
     }
 
-    /** Installs or refreshes the script with the mailbox folder filled in; returns its path. */
-    public static Path install(Path resolveDataDir, Path mailboxDir) throws IOException {
-        Path target = resolveDataDir.resolve(SCRIPT_FOLDER).resolve(SCRIPT_NAME);
+    /** Installs or refreshes the script with the mailbox folder filled in (forward slashes, which Windows accepts too); returns its path. */
+    public static Path install(Path fusionDir, Path mailboxDir) throws IOException {
+        Path target = fusionDir.resolve(SCRIPT_FOLDER).resolve(SCRIPT_NAME);
         for (String legacy : LEGACY_SCRIPTS) {
-            Files.deleteIfExists(resolveDataDir.resolve(legacy));
+            Files.deleteIfExists(fusionDir.resolve(legacy));
         }
         String script;
         try (InputStream in = ResolveScriptInstaller.class.getResourceAsStream(RESOURCE)) {
@@ -34,7 +34,7 @@ public final class ResolveScriptInstaller {
                 throw new IOException("Bundled script missing: " + RESOURCE);
             }
             script = new String(in.readAllBytes(), StandardCharsets.UTF_8)
-                    .replace(MAILBOX_PLACEHOLDER, mailboxDir.toAbsolutePath().toString());
+                    .replace(MAILBOX_PLACEHOLDER, mailboxDir.toAbsolutePath().toString().replace('\\', '/'));
         }
         if (!Files.exists(target) || !Files.readString(target, StandardCharsets.UTF_8).equals(script)) {
             Files.createDirectories(target.getParent());
@@ -45,10 +45,10 @@ public final class ResolveScriptInstaller {
 
     /** Best effort at GUI start-up: only if Resolve has been run for this user. */
     public static void installIfResolvePresent() {
-        Path dataDir = ResolveBridgePaths.resolveDataDir();
-        if (Files.isDirectory(dataDir)) {
+        Path fusionDir = ResolveBridgePaths.fusionDir();
+        if (Files.isDirectory(fusionDir)) {
             try {
-                install(dataDir, ResolveBridgePaths.mailboxDir());
+                install(fusionDir, ResolveBridgePaths.mailboxDir());
             } catch (IOException ignored) {
                 // optional convenience
             }

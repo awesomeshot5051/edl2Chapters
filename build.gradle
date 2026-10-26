@@ -1,0 +1,73 @@
+plugins {
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'com.awesomeshot5051'
+version = '1.3.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+javafx {
+    version = '25.0.4'
+    modules = ['javafx.controls']
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'com.awesomeshot5051.edl2chapters.Launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// ---- Packaging: values shared by the scripts in gradle/ ----
+ext {
+    packageName = 'edl2chapters'
+    displayName = 'Edl2Chapters'
+    mainClassName = 'com.awesomeshot5051.edl2chapters.Launcher'
+    wmClass = 'com.awesomeshot5051.edl2chapters.app.gui.EdlToChaptersApp'
+    appDescription = 'Converts DaVinci Resolve EDL markers to YouTube chapters'
+    distributionsDir = layout.buildDirectory.dir('distributions')
+    jpackageInput = layout.buildDirectory.dir('jpackage/input')
+    onWindows = System.getProperty('os.name').toLowerCase().contains('win')
+    jarFileName = tasks.named('jar').flatMap { it.archiveFileName }
+}
+
+// jpackage ships with full JDKs only (the JetBrains Runtime that IDEs use for Gradle lacks it).
+// Order: -PjdkHome=<path>, the Gradle JVM, then jpackage on PATH.
+def exeSuffix = ext.onWindows ? '.exe' : ''
+ext.jpackageBinary = [providers.gradleProperty('jdkHome').orNull, System.getProperty('java.home')]
+        .findAll { it != null }
+        .collect { new File(it, "bin/jpackage${exeSuffix}") }
+        .find { it.exists() } ?:
+        System.getenv('PATH').split(File.pathSeparator)
+                .collect { new File(it, "jpackage${exeSuffix}") }
+                .find { it.exists() }
+
+tasks.register('prepareJpackageInput', Sync) {
+    description = 'Collects the application and JavaFX jars for jpackage.'
+    group = 'distribution'
+    from tasks.named('jar')
+    from configurations.runtimeClasspath
+    into layout.buildDirectory.dir('jpackage/input')
+}
+
+apply from: 'gradle/deb.gradle'
+apply from: 'gradle/appimage.gradle'
+apply from: 'gradle/windows.gradle'
+apply from: 'gradle/release.gradle'

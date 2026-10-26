@@ -1,0 +1,78 @@
+// AppImage: jpackage app-image (bundled JRE) wrapped into an AppDir and squashed by appimagetool.
+def packageName = rootProject.ext.packageName
+def mainClassName = rootProject.ext.mainClassName
+def appDescription = rootProject.ext.appDescription
+def distributionsDir = rootProject.ext.distributionsDir
+def jpackageInput = rootProject.ext.jpackageInput
+def jpackageBinary = rootProject.ext.jpackageBinary
+def jarFileName = rootProject.ext.jarFileName
+
+def appImageToolVersion = '1.9.0'
+def appImageTool = layout.buildDirectory.file("tools/appimagetool-${appImageToolVersion}-x86_64.AppImage")
+def appImageWork = layout.buildDirectory.dir('appimage')
+
+def downloadAppImageTool = tasks.register('downloadAppImageTool') {
+    group = 'distribution'
+    description = 'Downloads the pinned appimagetool release.'
+    outputs.file appImageTool
+    doLast {
+        def target = appImageTool.get().asFile
+        target.parentFile.mkdirs()
+        new URL("https://github.com/AppImage/appimagetool/releases/download/${appImageToolVersion}/appimagetool-x86_64.AppImage")
+                .openStream().withCloseable { input -> target.withOutputStream { it << input } }
+        target.setExecutable(true)
+    }
+}
+
+def buildAppImageApp = tasks.register('buildAppImageApp', Exec) {
+    group = 'distribution'
+    description = 'Builds the portable app directory (launcher + private JRE) for the AppImage.'
+    dependsOn 'prepareJpackageInput'
+    doFirst {
+        if (jpackageBinary == null) {
+            throw new GradleException('jpackage not found; pass -PjdkHome=<full JDK 25 path> or put it on PATH')
+        }
+        def dest = appImageWork.get().dir('app').asFile
+        dest.deleteDir()
+        dest.mkdirs()
+        commandLine jpackageBinary.absolutePath,
+                '--type', 'app-image',
+                '--name', packageName,
+                '--app-version', project.version.toString(),
+                '--vendor', 'awesomeshot5051',
+                '--description', appDescription,
+                '--input', jpackageInput.get().asFile.absolutePath,
+                '--main-jar', jarFileName.get(),
+                '--main-class', mainClassName,
+                '--add-modules', 'java.base,java.desktop,java.logging,java.xml,jdk.unsupported',
+                '--java-options', '--enable-native-access=ALL-UNNAMED',
+                '--icon', file('src/main/resources/icons/ETIcon.png').absolutePath,
+                '--dest', dest.absolutePath
+    }
+}
+
+def assembleAppDir = tasks.register('assembleAppDir', Sync) {
+    group = 'distribution'
+    description = 'Lays out the AppDir (AppRun, .desktop, icon, app).'
+    dependsOn buildAppImageApp
+    into appImageWork.map { it.dir('Edl2Chapters.AppDir') }
+    from('packaging/linux/AppRun') { fileMode = 0755 }
+    from 'packaging/linux/edl2chapters.desktop'
+    from('src/main/resources/icons/ETIcon.png') { rename { "${packageName}.png" } }
+    from('src/main/resources/icons/ETIcon.png') { rename { '.DirIcon' } }
+    from(appImageWork.map { it.dir("app/${packageName}") }) { into "usr/${packageName}" }
+}
+
+tasks.register('packageAppImage', Exec) {
+    group = 'distribution'
+    description = 'Builds Edl2Chapters-<version>-x86_64.AppImage.'
+    dependsOn assembleAppDir, downloadAppImageTool
+    environment 'ARCH', 'x86_64'
+    environment 'APPIMAGE_EXTRACT_AND_RUN', '1' // works without FUSE (CI containers)
+    doFirst {
+        def out = distributionsDir.get().file("Edl2Chapters-${project.version}-x86_64.AppImage").asFile
+        out.parentFile.mkdirs()
+        commandLine appImageTool.get().asFile.absolutePath, '--no-appstream',
+                appImageWork.get().dir('Edl2Chapters.AppDir').asFile.absolutePath, out.absolutePath
+    }
+}

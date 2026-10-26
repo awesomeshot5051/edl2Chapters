@@ -1,0 +1,69 @@
+// Windows installer (.exe): jpackage builds the app image (launcher + private JRE), then NSIS (makensis)
+// wraps it with packaging/windows/installer.nsi, which also puts `edl2chapters` on the user's PATH.
+// jpackage cannot cross-compile, so these tasks run on Windows only (the release workflow builds it there);
+// the .nsi itself compiles anywhere makensis exists.
+def mainClassName = rootProject.ext.mainClassName
+def appDescription = rootProject.ext.appDescription
+def distributionsDir = rootProject.ext.distributionsDir
+def jpackageInput = rootProject.ext.jpackageInput
+def jpackageBinary = rootProject.ext.jpackageBinary
+def jarFileName = rootProject.ext.jarFileName
+def onWindows = rootProject.ext.onWindows
+
+def windowsAppRoot = layout.buildDirectory.dir('windows/app')
+
+// Order: -PmakensisPath=<path>, makensis on PATH, the default NSIS install folders.
+def makensisBinary = [providers.gradleProperty('makensisPath').orNull]
+        .findAll { it != null }.collect { new File(it) }
+        .plus(System.getenv('PATH').split(File.pathSeparator).collectMany { [new File(it, 'makensis'), new File(it, 'makensis.exe')] })
+        .plus(['C:/Program Files (x86)/NSIS/makensis.exe', 'C:/Program Files/NSIS/makensis.exe'].collect { new File(it) })
+        .find { it.file }
+
+def packageWindowsApp = tasks.register('packageWindowsApp', Exec) {
+    group = 'distribution'
+    description = 'Builds the Windows app image: Edl2Chapters.exe (GUI) + edl2chapters-cli.exe (console), with a private JRE.'
+    dependsOn 'prepareJpackageInput'
+    onlyIf { onWindows }
+    doFirst {
+        if (jpackageBinary == null) {
+            throw new GradleException('jpackage not found; pass -PjdkHome=<full JDK 25 path> or put it on PATH')
+        }
+        def dest = windowsAppRoot.get().asFile
+        dest.deleteDir()
+        dest.mkdirs()
+        commandLine jpackageBinary.absolutePath,
+                '--type', 'app-image',
+                '--name', 'Edl2Chapters',
+                '--app-version', project.version.toString(),
+                '--vendor', 'awesomeshot5051',
+                '--description', appDescription,
+                '--input', jpackageInput.get().asFile.absolutePath,
+                '--main-jar', jarFileName.get(),
+                '--main-class', mainClassName,
+                '--add-modules', 'java.base,java.desktop,java.logging,java.xml,jdk.unsupported',
+                '--java-options', '--enable-native-access=ALL-UNNAMED',
+                '--icon', file('src/main/resources/icons/ETIcon.ico').absolutePath,
+                '--add-launcher', 'edl2chapters-cli=' + file('packaging/windows/cli-launcher.properties').absolutePath,
+                '--dest', dest.absolutePath
+    }
+}
+
+tasks.register('packageExe', Exec) {
+    group = 'distribution'
+    description = 'Builds the Windows installer Edl2Chapters-<version>.exe (Windows + NSIS).'
+    dependsOn packageWindowsApp
+    onlyIf { onWindows }
+    doFirst {
+        if (makensisBinary == null) {
+            throw new GradleException('makensis not found; install NSIS or pass -PmakensisPath=<path>')
+        }
+        def out = distributionsDir.get().file("Edl2Chapters-${project.version}.exe").asFile
+        out.parentFile.mkdirs()
+        commandLine makensisBinary.absolutePath, '-V2',
+                "-DAPP_VERSION=${project.version}",
+                "-DAPP_DIR=${windowsAppRoot.get().dir('Edl2Chapters').asFile.absolutePath}",
+                "-DICON_FILE=${file('src/main/resources/icons/ETIcon.ico').absolutePath}",
+                "-DOUT_FILE=${out.absolutePath}",
+                file('packaging/windows/installer.nsi').absolutePath
+    }
+}
