@@ -1,0 +1,139 @@
+/* JavaFX port of the site.css theme: same palette, JavaFX-supported properties only. */
+.root {
+    -fx-base: #0a0a0a;
+    -fx-background: #0a0a0a;
+    -fx-control-inner-background: #111418;
+    -fx-text-base-color: #e0e0e0;
+    -fx-accent: #00bfff;
+    -fx-focus-color: #00bfff;
+    -fx-faint-focus-color: transparent;
+    -fx-font-family: "Segoe UI", "Tahoma", "Verdana", sans-serif;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+}
+
+.main-view {
+    -fx-background-color: linear-gradient(to bottom right, #000000, #0a0f1a 25%, #001f33 50%, #2a0f4d 80%, #3a1266);
+}
+
+.label {
+    -fx-text-fill: #e0e0e0;
+}
+
+.title-label {
+    -fx-font-size: 24px;
+    -fx-text-fill: #00bfff;
+    -fx-effect: dropshadow(gaussian, #00bfff, 12, 0.2, 0, 0);
+}
+
+.file-label,
+.muted-label {
+    -fx-text-fill: #888888;
+}
+
+.card {
+    -fx-background-color: rgba(20, 22, 30, 0.95);
+    -fx-border-color: rgba(0, 191, 255, 0.25);
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 10;
+}
+
+.card:hover {
+    -fx-border-color: #00bfff;
+    -fx-effect: dropshadow(gaussian, rgba(0, 191, 255, 0.2), 25, 0, 0, 0);
+}
+
+.button {
+    -fx-background-color: rgba(0, 191, 255, 0.12);
+    -fx-border-color: rgba(0, 191, 255, 0.5);
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-text-fill: #00bfff;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: rgba(138, 43, 226, 0.35);
+    -fx-border-color: #9b30ff;
+    -fx-text-fill: #e0e0e0;
+}
+
+.button:pressed {
+    -fx-background-color: #8a2be2;
+}
+
+.text-field {
+    -fx-background-color: #111418;
+    -fx-border-color: rgba(0, 191, 255, 0.3);
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-text-fill: #e0e0e0;
+    -fx-prompt-text-fill: #555555;
+}
+
+.text-field:focused {
+    -fx-border-color: #00bfff;
+}
+
+.text-field:disabled {
+    -fx-opacity: 0.45;
+}
+
+.check-box {
+    -fx-text-fill: #e0e0e0;
+}
+
+.check-box .box {
+    -fx-background-color: #111418;
+    -fx-border-color: rgba(0, 191, 255, 0.5);
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: #00bfff;
+}
+
+.output-area,
+.output-area .content {
+    -fx-background-color: #111418;
+    -fx-text-fill: #67e8f9;
+    -fx-font-family: "Cascadia Code", "Monospaced";
+    -fx-highlight-fill: #8a2be2;
+    -fx-highlight-text-fill: #ffffff;
+}
+
+.output-area {
+    -fx-border-color: rgba(0, 191, 255, 0.3);
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+}
+
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: rgba(0, 191, 255, 0.35);
+    -fx-background-radius: 6;
+}
+
+.scroll-bar .track,
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+}
+
+.status-ok {
+    -fx-text-fill: #00e676;
+}
+
+.status-error {
+    -fx-text-fill: #ff5252;
+}
+
+.drop-active {
+    -fx-border-color: #8a2be2;
+    -fx-border-width: 2;
+}
