@@ -1,6 +1,6 @@
 // GitHub release: creates and pushes tag v<version>, then the release with the full CHANGELOG.md as notes and every
-// installer found in build/distributions. The Windows .exe can only be built on Windows, so it is optional here:
-// the release workflow (triggered by the pushed tag) builds it and uploads it to this release.
+// installer found in build/distributions. Releases are Linux only (.deb and .AppImage) for now; the Windows
+// installer is not part of them (see gradle/windows.gradle and .github/workflows/release.yml to bring it back).
 def distributionsDir = rootProject.ext.distributionsDir
 
 def repository = 'awesomeshot5051/edl2Chapters'
@@ -9,8 +9,7 @@ def tag = "v${version}"
 
 def installers = [
         "edl2chapters_${version}_amd64.deb",
-        "Edl2Chapters-${version}-x86_64.AppImage",
-        "Edl2Chapters-${version}.exe"
+        "Edl2Chapters-${version}-x86_64.AppImage"
 ]
 
 def releaseNotes = tasks.register('releaseNotes') {
@@ -33,9 +32,10 @@ def releaseNotes = tasks.register('releaseNotes') {
 
 tasks.register('publishRelease') {
     group = 'release'
-    description = "Tags ${tag} and creates/updates the GitHub release as 'latest' with the .deb and .AppImage (and .exe if built) " +
-            '(-PdryRun prints the plan; -PallowPartial publishes with the .deb or .AppImage missing).'
-    dependsOn releaseNotes
+    description = "Tags ${tag} and creates/updates the GitHub release as 'latest' with the .deb and .AppImage " +
+            'builds them first (-PdryRun prints the plan; -PallowPartial publishes with the .deb or .AppImage missing).'
+    // Builds the distribution files first.
+    dependsOn releaseNotes, 'test', 'packageDeb', 'packageAppImage'
     def notes = layout.buildDirectory.file('release-notes.md')
     def dryRun = providers.gradleProperty('dryRun').isPresent()
     def allowPartial = providers.gradleProperty('allowPartial').isPresent()
@@ -52,7 +52,7 @@ tasks.register('publishRelease') {
 
         def files = installers.collect { distributionsDir.get().file(it).asFile }
         def present = files.findAll { it.exists() }
-        def missing = files.findAll { !it.exists() && !it.name.endsWith('.exe') }
+        def missing = files.findAll { !it.exists() }
         if (present.isEmpty()) fail('No installers in build/distributions; build them first')
         if (!missing.isEmpty() && !allowPartial) {
             fail("Missing installers: ${missing*.name.join(', ')} (use -PallowPartial to publish anyway)")

@@ -67,3 +67,32 @@ tasks.register('packageExe', Exec) {
                 file('packaging/windows/installer.nsi').absolutePath
     }
 }
+
+// ---- Cross-building the installer on Linux: packaging/windows/build-exe.sh ----
+// One jar with the app and the Windows JavaFX jars (natives included), which Launch4j wraps into the two .exe files.
+def winJavafx = configurations.create('winJavafx') {
+    canBeConsumed = false
+    canBeResolved = true
+    // Selects the OpenJFX 'winRuntime' variant (the Windows jars) instead of the build machine's.
+    attributes {
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.LIBRARY))
+        attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements, LibraryElements.JAR))
+        attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named(OperatingSystemFamily, OperatingSystemFamily.WINDOWS))
+        attribute(MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(MachineArchitecture, MachineArchitecture.X86_64))
+    }
+}
+['base', 'graphics', 'controls'].each { module ->
+    dependencies.add('winJavafx', "org.openjfx:javafx-${module}:${javafx.version}")
+}
+
+tasks.register('windowsFatJar', Jar) {
+    group = 'distribution'
+    description = 'Builds build/libs/edl2Chapters-<version>-win-all.jar: the app plus Windows JavaFX, for Launch4j.'
+    archiveClassifier = 'win-all'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': mainClassName }
+    from sourceSets.main.output
+    from { winJavafx.collect { zipTree(it) } }
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
+}

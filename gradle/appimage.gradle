@@ -56,7 +56,7 @@ def assembleAppDir = tasks.register('assembleAppDir', Sync) {
     description = 'Lays out the AppDir (AppRun, .desktop, icon, app).'
     dependsOn buildAppImageApp
     into appImageWork.map { it.dir('Edl2Chapters.AppDir') }
-    from('packaging/linux/AppRun') { fileMode = 0755 }
+    from('packaging/linux/AppRun') { filePermissions { unix('rwxr-xr-x') } }
     from 'packaging/linux/edl2chapters.desktop'
     from('src/main/resources/icons/ETIcon.png') { rename { "${packageName}.png" } }
     from('src/main/resources/icons/ETIcon.png') { rename { '.DirIcon' } }

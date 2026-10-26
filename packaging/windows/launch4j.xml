@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Template: packaging/windows/build-exe.sh fills in the @...@ placeholders. -->
+<launch4jConfig>
+  <dontWrapJar>false</dontWrapJar>
+  <headerType>@HEADER@</headerType>
+  <jar>@JAR@</jar>
+  <outfile>@OUTFILE@</outfile>
+  <errTitle>Edl2Chapters</errTitle>
+  <cmdLine></cmdLine>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <downloadUrl></downloadUrl>
+  <supportUrl></supportUrl>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <icon>@ICON@</icon>
+  <jre>
+    <path>runtime</path>
+    <requiresJdk>false</requiresJdk>
+    <requires64Bit>true</requires64Bit>
+    <minVersion></minVersion>
+    <maxVersion></maxVersion>
+    <opt>--enable-native-access=ALL-UNNAMED</opt>
+  </jre>
+  <versionInfo>
+    <fileVersion>@VERSION_QUAD@</fileVersion>
+    <txtFileVersion>@VERSION_QUAD@</txtFileVersion>
+    <fileDescription>@DESCRIPTION@</fileDescription>
+    <copyright>awesomeshot5051</copyright>
+    <productVersion>@VERSION_QUAD@</productVersion>
+    <txtProductVersion>@VERSION_QUAD@</txtProductVersion>
+    <productName>Edl2Chapters</productName>
+    <companyName>awesomeshot5051</companyName>
+    <internalName>Edl2Chapters</internalName>
+    <originalFilename>@ORIGINAL@</originalFilename>
+    <trademarks></trademarks>
+    <language>ENGLISH_US</language>
+  </versionInfo>
+  <messages>
+    <startupErr>An error occurred while starting Edl2Chapters.</startupErr>
+    <jreNotFoundErr>The bundled Java runtime is missing. Reinstall Edl2Chapters.</jreNotFoundErr>
+    <jreVersionErr>The bundled Java runtime is not usable. Reinstall Edl2Chapters.</jreVersionErr>
+    <launcherErr>The bundled Java runtime is corrupted. Reinstall Edl2Chapters.</launcherErr>
+  </messages>
+</launch4jConfig>
