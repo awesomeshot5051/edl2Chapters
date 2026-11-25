@@ -26,7 +26,9 @@ def releaseNotes = tasks.register('releaseNotes') {
         }
         def previous = (text =~ /## \[(\d+\.\d+\.\d+)]/).collect { it[1] }.find { it != version }
         def compare = previous ? "\n\n**Full diff:** https://github.com/${repository}/compare/v${previous}...${tag}" : ''
-        out.get().asFile.with { parentFile.mkdirs(); text = "${text}${compare}\n" }
+        def target = out.get().asFile
+        target.parentFile.mkdirs()
+        target.text = "${text}${compare}\n"
     }
 }
 
