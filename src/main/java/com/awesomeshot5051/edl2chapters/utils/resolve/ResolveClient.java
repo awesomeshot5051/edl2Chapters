@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 
 /**
  * Talks to the Lua bridge that Resolve runs from Workspace > Scripts (resolve/Edl2Chapters.lua).
- * Requests go out as request.lua in the mailbox folder; answers come back through Fusion.prefs.
+ * Requests go out as request.lua in the mailbox folder; answers come back in response.txt (Fusion.prefs on Resolve 21.1 and older).
  */
 public final class ResolveClient {
 
@@ -71,13 +71,40 @@ public final class ResolveClient {
     }
 
     private String readResponse(String id) throws IOException {
+        String encoded = fromResponseFile(id);
+        if (encoded == null) {
+            encoded = fromPrefs(id); // Resolve 21.1 and older answered through Fusion.prefs
+        }
+        if (encoded == null) {
+            return null;
+        }
+        try {
+            return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException partialWrite) {
+            return null; // the bridge is still writing; try again
+        }
+    }
+
+    /** Resolve 21.2+: the bridge writes one "id:base64" line to response.txt. Only a finished (newline-ended) line counts. */
+    private String fromResponseFile(String id) throws IOException {
+        Path file = mailboxDir.resolve("response.txt");
+        if (!Files.isRegularFile(file)) {
+            return null;
+        }
+        String text = Files.readString(file, StandardCharsets.ISO_8859_1);
+        if (!text.endsWith("\n") || !text.startsWith(id + ":")) {
+            return null;
+        }
+        return text.substring(id.length() + 1).strip();
+    }
+
+    private String fromPrefs(String id) throws IOException {
         if (!Files.isRegularFile(prefsFile)) {
             return null;
         }
         Matcher matcher = RESPONSE.matcher(Files.readString(prefsFile, StandardCharsets.ISO_8859_1));
         if (matcher.find() && matcher.group(1).startsWith(id + ":")) {
-            byte[] decoded = Base64.getDecoder().decode(matcher.group(1).substring(id.length() + 1));
-            return new String(decoded, StandardCharsets.UTF_8);
+            return matcher.group(1).substring(id.length() + 1);
         }
         return null;
     }

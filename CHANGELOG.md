@@ -2,6 +2,11 @@
 
 All notable changes to Edl2Chapters. Minor version bumps with every change; major only by decision.
 
+## [2.0.0] - 2026-11-24
+### Fixed
+- DaVinci Resolve 21.2 compatibility: 21.2 removed `loadfile` and `Fusion:SavePrefs`, which broke the bridge. The Lua bridge now reads requests with `fu:OpenFile` + `load()` and replies by writing `response.txt` in the mailbox; the app reads that file (and still understands the old Fusion.prefs reply for Resolve 21.1 and older).
+- Bridge takeover (replacing an older running bridge) no longer relies on Fusion prefs.
+
 ## [1.3.0] - 2026-10-26
 ### Added
 - AppImage build (`./gradlew packageAppImage`) for any x86-64 Linux distribution.

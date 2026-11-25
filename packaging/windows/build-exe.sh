@@ -9,7 +9,7 @@ LAUNCH4J_JAR="${LAUNCH4J_JAR:-/opt/launch4j/launch4j.jar}"
 RUNTIME_DIR="${RUNTIME_DIR:-/mnt/Data/GUI/SetupScript/runtime}"
 REQUIRED_MODULES=(java.base java.desktop java.logging java.xml java.net.http jdk.unsupported)
 
-# 1. Version from build.gradle (version = '1.3.0'); 1.3.0 becomes 1.3.0.0 for the Windows version blocks.
+# 1. Version from build.gradle (version = '2.0.0'); 2.0.0 becomes 2.0.0.0 for the Windows version blocks.
 VERSION=$(grep -E "^version *= *'" "$ROOT/build.gradle" | head -1 | cut -d"'" -f2)
 [ -n "$VERSION" ] || { echo "Could not read the version from build.gradle" >&2; exit 1; }
 VERSION_QUAD="${VERSION}.0"

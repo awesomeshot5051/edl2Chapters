@@ -4,9 +4,9 @@
 -- Edl2Chapters bridge. Run it from Workspace > Scripts > Edl2Chapters, then use the app's
 -- "Import from DaVinci" button.
 --
--- Resolve 21.x sandboxes this state (no io, os.execute, sockets), so it talks to the app the
--- same way AutoSubs does: the app drops request.lua into a mailbox folder, this loop reads it
--- with loadfile, and answers through Fusion.prefs (SetPrefs + SavePrefs). The loop only lives
+-- Resolve 21.x sandboxes this state (no io, os.execute, sockets; 21.2 also removed loadfile and
+-- SavePrefs), so the app drops request.lua into a mailbox folder, this loop reads it with
+-- fu:OpenFile and load(), and answers by writing response.txt with fu:OpenFile. The loop only lives
 -- while the app is open: the app keeps an "app-running" file there for as long as its window is.
 --
 -- This file is a TEMPLATE. The app writes the installed copy into Resolve's Scripts folder at
@@ -14,14 +14,17 @@
 
 local MAILBOX = [[@MAILBOX@]]
 
-local PREFS = "Global.Edl2ChaptersBridge."
 local POLL_SECONDS = 0.2
 local STARTUP_GRACE_SECONDS = 180
 
 local REQUEST_FILE = MAILBOX .. "/request.lua"
+local RESPONSE_FILE = MAILBOX .. "/response.txt"
+local OWNER_FILE = MAILBOX .. "/bridge-owner"
 local APP_FILE = MAILBOX .. "/app-running"
 
 local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+local fu -- set in run(); file access goes through it because Resolve 21.2 removed io/loadfile/SavePrefs
 
 local function base64(data)
     local out = {}
@@ -36,6 +39,87 @@ local function base64(data)
             .. (b and B64:sub(c3 + 1, c3 + 1) or "=") .. (c and B64:sub(c4 + 1, c4 + 1) or "=")
     end
     return table.concat(out)
+end
+
+-- Reads a whole text file, or nil. Feature-tested (not version-tested): io, then fu:OpenFile.
+local function readFile(path)
+    if type(io) == "table" and type(io.open) == "function" then
+        local f = io.open(path, "rb")
+        if not f then
+            return nil
+        end
+        local text = f:read("*a")
+        f:close()
+        return text
+    end
+    if fu ~= nil and type(fu.OpenFile) == "function" then
+        local ok, f = pcall(fu.OpenFile, fu, path, 1)
+        if not ok or not f then
+            return nil
+        end
+        local lines = {}
+        for _ = 1, 100000 do
+            local line = f:ReadLine()
+            if line == nil then
+                break
+            end
+            lines[#lines + 1] = line
+        end
+        f:Close()
+        return table.concat(lines, "\n")
+    end
+    return nil
+end
+
+-- Overwrites a file with a single line. Returns true on success.
+local function writeLine(path, text)
+    if type(io) == "table" and type(io.open) == "function" then
+        local f = io.open(path, "wb")
+        if f then
+            f:write(text, "\n")
+            f:close()
+            return true
+        end
+    end
+    if fu ~= nil and type(fu.OpenFile) == "function" then
+        local ok, f = pcall(fu.OpenFile, fu, path, 2)
+        if ok and f then
+            f:WriteLine(text)
+            f:Close()
+            return true
+        end
+    end
+    return false
+end
+
+local function fileExists(path)
+    if type(bmd) == "table" and type(bmd.fileexists) == "function" then
+        return bmd.fileexists(path)
+    end
+    return readFile(path) ~= nil
+end
+
+-- Compiles request text with an empty environment: the request is data only, no Lua functions.
+local function parseData(text)
+    local chunk
+    if type(load) == "function" then
+        local okLoad, c = pcall(load, text, "request", "t", {})
+        chunk = okLoad and c or nil
+        if not chunk then -- Lua 5.1 load() takes no env argument
+            chunk = load(text, "request")
+        end
+    end
+    if not chunk and type(loadstring) == "function" then
+        chunk = loadstring(text, "request")
+    end
+    if not chunk then
+        return nil
+    end
+    if type(setfenv) == "function" then
+        setfenv(chunk, {})
+    end
+    local ok, value = pcall(chunk)
+    return ok and value or nil
 end
 
 local function clean(text)
@@ -100,44 +184,38 @@ local function handle(request)
 end
 
 local function readRequest()
-    if not bmd.fileexists(REQUEST_FILE) then
+    local text = readFile(REQUEST_FILE)
+    if not text or text == "" then
         return nil
     end
-    local chunk = loadfile(REQUEST_FILE)
-    if not chunk then
-        return nil
-    end
-    setfenv(chunk, {}) -- the request is data only: an empty environment, no Lua functions
-    local ok, request = pcall(chunk)
-    if ok and type(request) == "table" and request.id ~= nil then
+    local request = parseData(text)
+    if type(request) == "table" and request.id ~= nil then
         return request
     end
     return nil
 end
 
-local function respond(fu, id, body)
-    for _ = 1, 5 do -- SavePrefs can fail transiently while Resolve writes the file itself
-        local ok = pcall(function()
-            fu:SetPrefs(PREFS .. "Response", tostring(id) .. ":" .. base64(body))
-            fu:SavePrefs()
-        end)
-        if ok then
+local function respond(id, body)
+    local line = tostring(id) .. ":" .. base64(body)
+    for _ = 1, 5 do
+        if writeLine(RESPONSE_FILE, line) then
             return
         end
         bmd.wait(0.05)
     end
+    print("[Edl2Chapters] Could not write the reply file; this Resolve build blocks file writes.")
 end
 
 local function run()
-    local fu = fusionObject()
-    if fu == nil or type(fu.SetPrefs) ~= "function" then
-        print("[Edl2Chapters] This Resolve build does not expose Fusion prefs; cannot start the bridge.")
+    fu = fusionObject()
+    if fu == nil then
+        print("[Edl2Chapters] Resolve did not expose Fusion; cannot start the bridge.")
         return
     end
 
-    -- Takeover: a newer run replaces an older loop (which exits when Stop differs from its start value).
-    local myStop = tostring(os.time()) .. " " .. tostring({})
-    fu:SetPrefs(PREFS .. "Stop", myStop)
+    -- Takeover: a newer run replaces an older loop (which exits when the owner file differs from its token).
+    local myToken = tostring(os.time()) .. " " .. tostring({})
+    writeLine(OWNER_FILE, myToken)
     bmd.wait(0.6)
 
     local started = os.time()
@@ -146,11 +224,12 @@ local function run()
     print("[Edl2Chapters] Bridge running. Open Edl2Chapters and press \"Import from DaVinci\".")
 
     while true do
-        if fu:GetPrefs(PREFS .. "Stop") ~= myStop then
+        local owner = readFile(OWNER_FILE)
+        if owner ~= nil and owner:gsub("%s+$", "") ~= myToken then
             print("[Edl2Chapters] Replaced by a newer run; stopping.")
             return
         end
-        if bmd.fileexists(APP_FILE) then
+        if fileExists(APP_FILE) then
             appSeen = true
         elseif appSeen then
             print("[Edl2Chapters] App closed; bridge stopped.")
@@ -164,7 +243,7 @@ local function run()
         if request ~= nil and tostring(request.id) ~= lastId then
             lastId = tostring(request.id)
             local ok, result = pcall(handle, request)
-            respond(fu, request.id, ok and ("OK\n" .. result) or ("ERROR\n" .. tostring(result)))
+            respond(request.id, ok and ("OK\n" .. result) or ("ERROR\n" .. tostring(result)))
         end
         bmd.wait(POLL_SECONDS)
     end

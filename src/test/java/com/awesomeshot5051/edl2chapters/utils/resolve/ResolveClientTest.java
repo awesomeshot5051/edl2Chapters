@@ -48,7 +48,7 @@ class ResolveClientTest {
         fakeBridge.join();
     }
 
-    /** Plays the Lua side: reads request.lua, answers in Resolve's Fusion.prefs format. */
+    /** Plays the Lua side: reads request.lua, answers in response.txt like the 21.2 bridge. */
     private void bridgeLoop() {
         Pattern id = Pattern.compile("id = \"(\\d+)\"");
         String lastId = "";
@@ -64,8 +64,7 @@ class ResolveClientTest {
                                 : text.contains("timeline = 2") ? "OK\n0\tSneak Peak\n38\tChannel Intro"
                                 : "ERROR\nno timeline number 9";
                         String encoded = Base64.getEncoder().encodeToString(body.getBytes(StandardCharsets.UTF_8));
-                        Files.writeString(prefs, "{\n\tGlobal = {\n\t\tEdl2ChaptersBridge = {\n\t\t\tStop = \"1 t\",\n"
-                                + "\t\t\tResponse = \"" + lastId + ":" + encoded + "\",\n\t\t},\n\t},\n}\n");
+                        Files.writeString(mailbox.resolve("response.txt"), lastId + ":" + encoded + "\n");
                     }
                 }
                 Thread.sleep(20);
